@@ -1,0 +1,73 @@
+name: CI
+
+# Default branch is `spike/test`. Every push there and every pull request must
+# pass the repository checks, the project test runner, and the verification
+# skill's doctor check.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - spike/test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  checks:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install checker dependencies
+        run: python3 -m pip install --requirement requirements-dev.txt
+      - name: Validate the CI workflow and the verification skill
+        run: python3 scripts/check_repo.py
+      - name: Run the project test suite
+        run: bash scripts/run_project_tests.sh
+
+  verification:
+    name: Verification skill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install checker dependencies
+        run: python3 -m pip install --requirement requirements-dev.txt
+      - name: Prepare the verification environment
+        run: bash .claude/skills/verify-cloud-coordinator/scripts/launch.sh
+      - name: Doctor
+        run: bash .claude/skills/verify-cloud-coordinator/scripts/doctor.sh
+      - name: Drive the repository gate
+        run: bash .claude/skills/verify-cloud-coordinator/scripts/drive.sh gate
+      - name: Prove the gate fails when a trigger is removed
+        run: bash .claude/skills/verify-cloud-coordinator/scripts/drive.sh gate-negative
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence
+          path: artifacts/verify
+          if-no-files-found: warn
+      - name: Clean up
+        if: always()
+        run: bash .claude/skills/verify-cloud-coordinator/scripts/cleanup.sh
