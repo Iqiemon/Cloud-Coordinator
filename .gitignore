@@ -1,0 +1,11 @@
+# Local scratch state and evidence from the verification skill.
+artifacts/
+.verify/
+.claude/skills/verify-cloud-coordinator/.last-run
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
